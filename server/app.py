@@ -253,7 +253,7 @@ def detect_docker_environment(
     dockerenv_path: Path | None = None,
     cgroup_path: Path | None = None,
 ) -> bool:
-    """启动期一次性检测当前是否在 Docker / Podman 容器内。
+    """启动期一次性检测当前是否在 Docker / Podman / Kubernetes 容器内。
 
     用于决定是否启用 ``SandboxSettings.enableWeakerNestedSandbox``。
     """
@@ -261,11 +261,15 @@ def detect_docker_environment(
     cgroup = cgroup_path or _CGROUP_PATH
     if docker_marker.exists():
         return True
+    # Kubernetes 的 containerd 容器可无 .dockerenv，且 cgroup namespace 只显示 0::/。
+    # API Service 的两个标准环境变量共同作为该环境下的容器标记。
+    if os.environ.get("KUBERNETES_SERVICE_HOST", "").strip() and os.environ.get("KUBERNETES_SERVICE_PORT", "").strip():
+        return True
     try:
         content = cgroup.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return False
-    return "docker" in content or "podman" in content
+    return any(marker in content for marker in ("docker", "podman", "kubepods"))
 
 
 # 初始化日志：模块导入期只挂 stream handler。

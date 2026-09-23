@@ -264,6 +264,30 @@ def test_detect_no_docker(tmp_path) -> None:
     assert detect_docker_environment(dockerenv_path=tmp_path / "nope", cgroup_path=tmp_path / "also_nope") is False
 
 
+def test_detect_kubernetes_with_namespaced_cgroup(tmp_path, monkeypatch) -> None:
+    fake_cgroup = tmp_path / "cgroup"
+    fake_cgroup.write_text("0::/\n")
+    monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "10.43.0.1")
+    monkeypatch.setenv("KUBERNETES_SERVICE_PORT", "443")
+    assert detect_docker_environment(dockerenv_path=tmp_path / "nope", cgroup_path=fake_cgroup) is True
+
+
+def test_detect_kubernetes_via_cgroup(tmp_path, monkeypatch) -> None:
+    fake_cgroup = tmp_path / "cgroup"
+    fake_cgroup.write_text("0::/kubepods.slice/kubepods-burstable.slice/pod123\n")
+    monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
+    monkeypatch.delenv("KUBERNETES_SERVICE_PORT", raising=False)
+    assert detect_docker_environment(dockerenv_path=tmp_path / "nope", cgroup_path=fake_cgroup) is True
+
+
+def test_partial_kubernetes_environment_does_not_enable_nested_mode(tmp_path, monkeypatch) -> None:
+    fake_cgroup = tmp_path / "cgroup"
+    fake_cgroup.write_text("0::/\n")
+    monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "10.43.0.1")
+    monkeypatch.delenv("KUBERNETES_SERVICE_PORT", raising=False)
+    assert detect_docker_environment(dockerenv_path=tmp_path / "nope", cgroup_path=fake_cgroup) is False
+
+
 # bool 是 int 子类，``isinstance(True, int) and True > 0`` 为真——这一组三连测试
 # 防止 startup 日志判定回退到天真的 isinstance 写法，把 abort 信号误打成"同步完成"。
 def test_log_profile_sync_outcome_aborted_logs_warning(

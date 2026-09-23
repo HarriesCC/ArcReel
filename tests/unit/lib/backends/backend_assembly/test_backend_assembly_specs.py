@@ -354,11 +354,11 @@ class TestTextSimpleSpec:
         spec = get_provider_spec("ark", "text")
         assert spec.registry_backend == "ark"
         config = _loaded(credentials={"api_key": "ark-key"}, provider_id="ark")
-        assert _built(spec, config, "doubao-seed-2-0-lite-260215") == {
+        assert _built(spec, config, "doubao-seed-2-0-lite-260428") == {
             "media": "text",
             "backend": "ark",
             "kwargs": {
-                "model": "doubao-seed-2-0-lite-260215",
+                "model": "doubao-seed-2-0-lite-260428",
                 "api_key": "ark-key",
                 "base_url": "https://ark.cn-beijing.volces.com/api/v3",
             },

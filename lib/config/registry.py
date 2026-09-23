@@ -546,12 +546,12 @@ PROVIDER_REGISTRY: dict[str, ProviderMeta] = {
                 capabilities=["text_generation", "vision"],
                 pricing=_ark_text_pricing("doubao-seed-2-0-pro-260215", 3.20, 16.00),
             ),
-            "doubao-seed-2-0-lite-260215": ModelInfo(
+            "doubao-seed-2-0-lite-260428": ModelInfo(
                 display_name="豆包 Seed 2.0 Lite",
                 media_type="text",
                 capabilities=["text_generation", "vision"],
                 default=True,
-                pricing=_ark_text_pricing("doubao-seed-2-0-lite-260215", 0.60, 3.60),
+                pricing=_ark_text_pricing("doubao-seed-2-0-lite-260428", 0.60, 3.60),
             ),
             "doubao-seed-2-0-mini-260215": ModelInfo(
                 display_name="豆包 Seed 2.0 Mini",

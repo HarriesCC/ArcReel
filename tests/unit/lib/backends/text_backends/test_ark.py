@@ -68,7 +68,7 @@ class TestProperties:
 
     def test_default_model(self, mock_ark):
         b = ArkTextBackend(api_key="k")
-        assert b.model == "doubao-seed-2-0-lite-260215"
+        assert b.model == "doubao-seed-2-0-lite-260428"
 
     def test_capabilities(self, mock_ark):
         b = ArkTextBackend(api_key="k")
@@ -172,7 +172,7 @@ class TestCapabilityAwareStructured:
     def backend_no_structured(self, mock_ark):
         """创建一个模型不支持原生 structured_output 的 backend。"""
         _, mock_client = mock_ark
-        # 使用默认模型 doubao-seed-2-0-lite-260215，registry 中已移除 structured_output
+        # 使用默认模型 doubao-seed-2-0-lite-260428，registry 中已移除 structured_output
         b = ArkTextBackend(api_key="k")
         b._test_client = mock_client
         return b

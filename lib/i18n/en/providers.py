@@ -28,7 +28,7 @@ MESSAGES: dict[str, str] = {
     # Model display names (registry entries written in a non-Latin script; brand-only
     # names are absent on purpose and fall back to lib/config/registry.py display_name)
     "model_name_ark_doubao-seed-2-0-pro-260215": "Doubao Seed 2.0 Pro",
-    "model_name_ark_doubao-seed-2-0-lite-260215": "Doubao Seed 2.0 Lite",
+    "model_name_ark_doubao-seed-2-0-lite-260428": "Doubao Seed 2.0 Lite",
     "model_name_ark_doubao-seed-2-0-mini-260215": "Doubao Seed 2.0 Mini",
     "model_name_ark_doubao-seed-1-8-251228": "Doubao Seed 1.8",
     "model_name_ark-agent-plan_doubao-seed-2.0-pro": "Doubao Seed 2.0 Pro",

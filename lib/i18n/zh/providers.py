@@ -28,7 +28,7 @@ MESSAGES: dict[str, str] = {
     # Model display names（registry 里非拉丁写法的条目；纯品牌名条目不入表，由
     # translate_or 回退到 lib/config/registry.py 的 display_name）
     "model_name_ark_doubao-seed-2-0-pro-260215": "豆包 Seed 2.0 Pro",
-    "model_name_ark_doubao-seed-2-0-lite-260215": "豆包 Seed 2.0 Lite",
+    "model_name_ark_doubao-seed-2-0-lite-260428": "豆包 Seed 2.0 Lite",
     "model_name_ark_doubao-seed-2-0-mini-260215": "豆包 Seed 2.0 Mini",
     "model_name_ark_doubao-seed-1-8-251228": "豆包 Seed 1.8",
     "model_name_ark-agent-plan_doubao-seed-2.0-pro": "豆包 Seed 2.0 Pro",

@@ -1,6 +1,6 @@
 ---
 name: compose-video
-description: 把已生成的视频片段按剧本顺序拼接为单集成片，可选混入 BGM 与场景间转场。当用户说"拼成片"、"合成本集视频"或"加背景音乐"时使用。
+description: 把已生成的视频片段按剧本顺序拼接为单集成片，可选混入 BGM、场景间转场或烧录对白字幕。当用户说"拼成片"、"合成本集视频"或"加背景音乐"时使用。
 ---
 
 # 合成视频
@@ -18,11 +18,12 @@ description: 把已生成的视频片段按剧本顺序拼接为单集成片，�
 服务端 presentation 统一决定声音归属与字幕时序，但只由 Web 端 `JianyingDraftService` 导出消费。
 本 skill 调用的 `compose_video.py` 不读取 presentation：
 
-- 直接读取 `generated_assets(scene).video_clip`，保留片段内置音频；不添加 TTS 或字幕轨
+- 直接读取 `generated_assets(scene).video_clip`，保留片段内置音频；不添加 TTS；指定 `--subtitles` 时烧录对白字幕
 - **不静音、不闪避、不分离供应商原音**，也不改写源片段文件
 - 指定 `--music` 时，BGM 先按固定 `volume=0.3` 调整，再由 ffmpeg `amix` 与片段音频混合；
   不指定时原音原样透传
-- **不自行估算字幕时间轴**，需要 TTS 或字幕轨时走 Web 端剪映草稿导出
+- `--subtitles` 复用 `MechanicalSubtitleTiming`，按台词长度分配实际中间片时长，导出 `_subtitled.mp4` 和同名 SRT；字幕已烧入画面，原声保留。此计时不做语音识别或逐字对齐，须预览校对
+- 字幕仅支持角色对白与静默分镜、直切拼接；存在其他转场时显式使用 `--no-transitions`。旁白/TTS 请走 Web 端剪映草稿导出
 - 时长以媒体实际时长为准，不用剧本计划的 `duration_seconds` 反推声画边界
 
 stale 产物照常参与成片，不因「看起来旧」跳过或触发重生。
@@ -45,6 +46,12 @@ python .claude/skills/compose-video/scripts/compose_video.py scripts/episode_1.j
 python .claude/skills/compose-video/scripts/compose_video.py scripts/episode_1.json --output episode_1_final.mp4
 ```
 
+带字幕示例（系统需安装 libass 版 ffmpeg 与中文字体；macOS 可安装 `ffmpeg-full` 并将其 bin 目录加入 PATH）：
+
+```bash
+python .claude/skills/compose-video/scripts/compose_video.py scripts/episode_1.json --subtitles --no-transitions
+```
+
 完整参数：
 
 | 参数 | 类型 | 说明 |
@@ -53,6 +60,8 @@ python .claude/skills/compose-video/scripts/compose_video.py scripts/episode_1.j
 | `--output OUTPUT` | 可选 | 输出文件名；缺省按剧本 `novel.chapter` 字段生成。无论何种取值，最终都落在 `output/` 子目录内 |
 | `--music MUSIC` | 可选 | BGM 文件路径（相对项目 cwd 或绝对路径），但**必须解析后位于项目目录内** |
 | `--no-transitions` | flag | 全部用 cut 直接拼接，忽略剧本里的 `transition_to_next` |
+| `--subtitles` | flag | 烧录对白字幕并保存 SRT，机械计时需校对；仅支持直切 |
+| `--subtitle-font FONT` | 可选 | 已安装字体名称；macOS 默认 Heiti SC，其他平台默认 Noto Sans CJK SC |
 
 ## 工作流程
 
@@ -94,4 +103,4 @@ python .claude/skills/compose-video/scripts/compose_video.py scripts/episode_1.j
 - 多集合并 / 单集分片裁剪
 - BGM 音量调节、独立 BGM 时间轴
 - 片头片尾 intro/outro
-- 字幕渲染
+- 自动语音识别、精确台词对齐与转场重叠字幕

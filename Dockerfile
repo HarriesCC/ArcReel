@@ -32,6 +32,7 @@ RUN echo "apt refresh: ${APT_REFRESH}" \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ffmpeg \
+    fonts-noto-cjk \
     curl \
     bubblewrap \
     socat \

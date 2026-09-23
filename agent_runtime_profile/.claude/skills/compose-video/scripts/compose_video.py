@@ -12,6 +12,7 @@ Example:
 
 import argparse
 import functools
+import html
 import json
 import math
 import os
@@ -43,6 +44,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from lib.project.project_manager import ProjectManager
 from lib.script.script_models import get_generated_assets
+from lib.speech.speech_artifact_provenance import project_subtitle_utterances
+from lib.speech.speech_composition import SpeechMode, admit_script_unit
+from lib.speech.speech_presentation import MechanicalSubtitleTiming
 
 FFMPEG_TOOLS_HINT = "需要 ffmpeg 和 ffprobe 同时可用（在 PATH 中，或位于下列常见安装位之一）"
 
@@ -192,14 +196,14 @@ def resolved_command(cmd: list[str]) -> list[str]:
     return [ffmpeg_path if cmd[0] == "ffmpeg" else ffprobe_path, *cmd[1:]]
 
 
-def run_capture(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+def run_capture(cmd: list[str], *, cwd: str | None = None) -> subprocess.CompletedProcess[str]:
     """脚本内唯一的子进程入口。
 
     - 首位工具名经 resolve_ffmpeg_tools() 解析为绝对路径，不依赖 PATH 命中
     - 强制 UTF-8 解码：`text=True` 按系统 locale 解码（中文 Windows 为 GBK），
       含非 GBK 字符的路径或媒体元数据会让 stderr 解码抛 UnicodeDecodeError
     """
-    return subprocess.run(resolved_command(cmd), capture_output=True, encoding="utf-8", errors="replace")
+    return subprocess.run(resolved_command(cmd), capture_output=True, encoding="utf-8", errors="replace", cwd=cwd)
 
 
 def _require_project_cwd() -> tuple[ProjectManager, str, Path]:
@@ -749,11 +753,95 @@ def add_background_music(video_path: Path, music_path: Path, output_path: Path, 
         raise RuntimeError(f"添加背景音乐失败: {result.stderr}")
 
 
+def build_episode_srt(scenes: list[dict], durations: list[float]) -> str:
+    """按实际直切片段时长复用共享机械字幕策略；不推测供应商原音的逐字时间。"""
+    blocks: list[str] = []
+    offset = 0
+
+    def timestamp(microseconds: int) -> str:
+        milliseconds = microseconds // 1000
+        seconds, milliseconds = divmod(milliseconds, 1000)
+        minutes, seconds = divmod(seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
+
+    for scene, duration in zip(scenes, durations, strict=True):
+        if not math.isfinite(duration) or duration <= 0:
+            raise ValueError("字幕需要有效的实际片段时长")
+        admission = admit_script_unit("scenes", scene)
+        if not admission.allowed or admission.preparation.mode is SpeechMode.NARRATOR_VOICEOVER:
+            raise ValueError(f"分镜 {scene.get('scene_id')} 需要配音或重新规划，请使用剪映草稿导出")
+        boundary = round(duration * 1_000_000)
+        cues = MechanicalSubtitleTiming().distribute(
+            project_subtitle_utterances(admission.preparation), boundary_microseconds=boundary
+        )
+        for cue in cues:
+            # SRT 经 libass 解析，台词中的 HTML/ASS 控制符不能成为排版命令。
+            text = html.escape(cue.text, quote=False).replace("{", "｛").replace("}", "｝").replace("\\", "＼")
+            text = " ".join(text.split())
+            blocks.append(
+                f"{len(blocks) + 1}\n{timestamp(offset + cue.start_microseconds)} --> "
+                f"{timestamp(offset + cue.end_microseconds)}\n{text}\n"
+            )
+        offset += boundary
+    return "\n".join(blocks)
+
+
+def require_subtitle_filter() -> None:
+    result = run_capture(["ffmpeg", "-hide_banner", "-filters"])
+    if result.returncode != 0 or not re.search(r"\bsubtitles\s+V->V", result.stdout):
+        raise RuntimeError("带字幕导出需要支持 libass/subtitles 的 ffmpeg；macOS 可安装 ffmpeg-full")
+
+
+def burn_subtitle_file(video_path: Path, subtitle_path: Path, output_path: Path, *, font: str) -> None:
+    """使用临时固定文件名避开滤镜路径转义，并保留原音轨。"""
+    if not font.strip() or any(char in font for char in ",:'\\\n\r"):
+        raise ValueError("字幕字体名称包含不支持的字符")
+    style = (
+        f"FontName={font},FontSize=12,PrimaryColour=&H00FFFFFF,OutlineColour=&H00101010,"
+        "BorderStyle=1,Outline=1.2,Shadow=0,Alignment=2,MarginL=24,MarginR=24,MarginV=30"
+    )
+    with tempfile.TemporaryDirectory(prefix="arcreel-subtitles-") as directory:
+        shutil.copyfile(subtitle_path, Path(directory) / "captions.srt")
+        result = run_capture(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path.resolve()),
+                "-vf",
+                f"subtitles=filename=captions.srt:force_style='{style}'",
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a?",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "medium",
+                "-crf",
+                "18",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "copy",
+                "-movflags",
+                "+faststart",
+                str(output_path.resolve()),
+            ],
+            cwd=directory,
+        )
+        if result.returncode:
+            raise RuntimeError(f"字幕烧录失败: {result.stderr}")
+
+
 def compose_video(
     script_filename: str,
     output_filename: str | None = None,
     music_path: str | None = None,
     use_transitions: bool = True,
+    subtitles: bool = False,
+    subtitle_font: str | None = None,
 ) -> Path:
     """
     合成最终视频
@@ -763,6 +851,8 @@ def compose_video(
         output_filename: 输出文件名
         music_path: 背景音乐文件路径
         use_transitions: 是否使用转场效果
+        subtitles: 烧录机械计时的角色对白字幕并导出 SRT（仅支持直切）
+        subtitle_font: 已安装字体名称
 
     Returns:
         输出视频路径
@@ -807,6 +897,15 @@ def compose_video(
     if not video_paths:
         raise ValueError("没有可用的视频片段")
 
+    subtitle_text = ""
+    if subtitles:
+        if use_transitions and any(t != "cut" for t in transitions[:-1]):
+            raise ValueError("自动字幕当前支持直切合成；请使用 --no-transitions，或通过剪映调整转场字幕")
+        require_subtitle_filter()
+        subtitle_text = build_episode_srt(script["scenes"], [probe_media(p)["duration"] for p in video_paths])
+        if not subtitle_text:
+            raise ValueError("剧本没有可导出的角色对白，未生成带字幕版本")
+
     print(f"📹 共 {len(video_paths)} 个视频片段")
 
     # 确定输出路径：强制落在 project_dir/output/ 内，拒绝 ../ 逃逸
@@ -841,7 +940,30 @@ def compose_video(
     # 合成视频
     print("🎬 正在合成视频...")
 
-    if use_transitions and any(t != "cut" for t in transitions):
+    if subtitles:
+        with tempfile.TemporaryDirectory(prefix="arcreel-caption-concat-") as directory:
+            normalized = normalize_clips(video_paths, Path(directory))
+            durations = []
+            for path in normalized:
+                result = run_capture(
+                    [
+                        "ffprobe",
+                        "-v",
+                        "error",
+                        "-show_entries",
+                        "format=duration",
+                        "-of",
+                        "default=noprint_wrappers=1:nokey=1",
+                        str(path),
+                    ]
+                )
+                if result.returncode:
+                    raise RuntimeError(f"无法获取字幕拼接边界: {result.stderr}")
+                # concat 会把较短的音视频轨补齐到较长轨，使用归零后中间片的容器时长。
+                durations.append(float(result.stdout.strip()))
+            subtitle_text = build_episode_srt(script["scenes"], durations)
+            concatenate_final(normalized, output_path)
+    elif use_transitions and any(t != "cut" for t in transitions):
         concatenate_with_transitions(video_paths, transitions, output_path)
     else:
         concatenate_simple(video_paths, output_path)
@@ -856,6 +978,22 @@ def compose_video(
         output_path = final_output
         print(f"✅ 背景音乐添加完成: {output_path}")
 
+    if subtitles:
+        subtitled_output = output_path.with_stem(output_path.stem + "_subtitled")
+        subtitle_path = subtitled_output.with_suffix(".srt")
+        if subtitled_output.is_symlink() or subtitle_path.is_symlink():
+            raise ValueError("字幕输出文件不能是符号链接")
+        subtitle_path.write_text(subtitle_text, encoding="utf-8")
+        burn_subtitle_file(
+            output_path,
+            subtitle_path,
+            subtitled_output,
+            font=subtitle_font or ("Heiti SC" if sys.platform == "darwin" else "Noto Sans CJK SC"),
+        )
+        print(f"✅ 带字幕视频: {subtitled_output}；可编辑字幕: {subtitle_path}")
+        print("字幕按台词长度分配实际片段时长，未进行语音对齐，请预览校对。")
+        output_path = subtitled_output
+
     return output_path
 
 
@@ -865,6 +1003,8 @@ def main():
     parser.add_argument("--output", help="输出文件名")
     parser.add_argument("--music", help="背景音乐文件")
     parser.add_argument("--no-transitions", action="store_true", help="不使用转场效果")
+    parser.add_argument("--subtitles", action="store_true", help="按剧本对白烧录字幕并导出 SRT（机械计时，需校对）")
+    parser.add_argument("--subtitle-font", help="字幕字体名称；系统须已安装对应字体")
 
     args = parser.parse_args()
 
@@ -882,7 +1022,14 @@ def main():
         sys.exit(1)
 
     try:
-        output_path = compose_video(args.script, args.output, args.music, use_transitions=not args.no_transitions)
+        output_path = compose_video(
+            args.script,
+            args.output,
+            args.music,
+            use_transitions=not args.no_transitions,
+            subtitles=args.subtitles,
+            subtitle_font=args.subtitle_font,
+        )
 
         print(f"\n🎉 最终视频: {output_path}")
         print("   单独片段保留在: videos/")

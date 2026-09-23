@@ -36,6 +36,7 @@ from lib.agent.profile_manifest import VALID_CONTENT_MODES
 from lib.i18n import DEFAULT_LOCALE
 from lib.infra.app_data_dir import app_data_dir
 from lib.project.project_manager import ProjectManager
+from server.agent_runtime.availability import require_agent_enabled
 from server.agent_runtime.event_log import (
     EventLogService,
     EventLogStore,
@@ -131,6 +132,7 @@ class AssistantService:
         切到代码白名单路径（详见 ``SessionManager.configure_sandbox_runtime``）。
         默认 ``True`` 保持 macOS / Linux 现状不变。
         """
+        require_agent_enabled()
         if self._startup_done:
             return
         async with self._startup_lock:

@@ -80,6 +80,13 @@ def _client(monkeypatch):
 
 
 class TestAssistantRouter:
+    def test_disabled_agent_rejects_requests_before_service_execution(self, monkeypatch):
+        monkeypatch.setenv("ARCREEL_AGENT_ENABLED", "false")
+        with _client(monkeypatch) as client:
+            response = client.post(f"{PREFIX}/sessions/send", json={"content": "hello"})
+            assert response.status_code == 503
+            assert "停用" in response.json()["detail"]
+
     def test_full_endpoints_and_errors(self, monkeypatch):
         with _client(monkeypatch) as client:
             # POST /sessions/send — new session (no session_id)

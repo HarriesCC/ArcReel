@@ -1,4 +1,5 @@
 MESSAGES = {
+    "agent_disabled": "The embedded AI agent is disabled on this deployment.",
     "project_migration_failed": "Project '{name}' has not finished its data upgrade, so generation is unavailable. Reason: {reason}. Repair it in the agent conversation, then retry the upgrade",
     "project_not_found": "Project '{name}' does not exist or is not initialized",
     "resource_not_found": "The requested resource does not exist",

@@ -1,4 +1,5 @@
 MESSAGES = {
+    "agent_disabled": "当前部署已停用内嵌 AI 助手。",
     "project_migration_failed": "项目 '{name}' 的数据升级未完成，暂时无法生成内容。原因：{reason}。请在 Agent 对话中修复后重试升级",
     "project_not_found": "项目 '{name}' 不存在或未初始化",
     "resource_not_found": "请求的资源不存在",

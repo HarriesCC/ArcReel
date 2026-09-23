@@ -40,6 +40,7 @@ from lib.infra.logging_config import attach_file_handler, migrate_legacy_log_dir
 from lib.infra.path_safety import try_safe_join
 from lib.project.project_migrations import cleanup_stale_backups, run_project_migrations
 from lib.script.source_loader.migration import migrate_project_source_encoding
+from server.agent_runtime.availability import agent_enabled
 from server.auth import ensure_auth_password, get_current_user, warn_if_auth_disabled
 from server.cors_config import resolve_cors_policy
 from server.dependencies import require_project_migration_ok
@@ -348,7 +349,8 @@ async def lifespan(app: FastAPI):
     # Startup
     # 安全红线检测：先父进程 env 净化，再 sandbox 工具可用性，再 docker 检测
     assert_no_provider_secrets_in_environ()
-    sandbox_enabled = check_sandbox_available()
+    embedded_agent_enabled = agent_enabled()
+    sandbox_enabled = check_sandbox_available() if embedded_agent_enabled else False
     # detect_docker_environment 仅在 sandbox 可用平台有意义（Linux 路径探测）；
     # Windows 回退时跳过，避免无意义的文件系统调用。
     is_docker = detect_docker_environment() if sandbox_enabled else False
@@ -450,8 +452,9 @@ async def lifespan(app: FastAPI):
     await startup_http_client()
 
     # Initialize async services
-    await assistant.assistant_service.startup(in_docker=is_docker, sandbox_enabled=sandbox_enabled)
-    assistant.assistant_service.session_manager.start_patrol()
+    if embedded_agent_enabled:
+        await assistant.assistant_service.startup(in_docker=is_docker, sandbox_enabled=sandbox_enabled)
+        assistant.assistant_service.session_manager.start_patrol()
 
     logger.info("启动 GenerationWorker...")
     worker = create_generation_worker()

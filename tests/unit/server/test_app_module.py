@@ -41,13 +41,26 @@ class TestAppModule:
         assert received == {"executor": execute_generation_task, "resume_executor": execute_resume_video_task}
 
     @pytest.mark.asyncio
-    async def test_lifespan_starts_and_stops_worker(self, monkeypatch):
+    @pytest.mark.parametrize("agent_enabled", [True, False])
+    async def test_lifespan_starts_and_stops_worker(self, monkeypatch, agent_enabled):
+        monkeypatch.setenv("ARCREEL_AGENT_ENABLED", str(agent_enabled).lower())
+        agent_starts = []
+
+        async def start_agent(**kwargs):
+            agent_starts.append(kwargs)
+
+        def sandbox_check():
+            if not agent_enabled:
+                raise RuntimeError("Sandbox is unavailable on this host")
+            return True
+
+        monkeypatch.setattr(app_module, "check_sandbox_available", sandbox_check)
         worker = _FakeWorker()
         monkeypatch.setattr(app_module, "create_generation_worker", lambda: worker)
         monkeypatch.setattr(app_module, "ensure_auth_password", lambda: "test")
         monkeypatch.setattr(app_module, "init_db", _noop_async)
         monkeypatch.setattr(lib.db, "init_db", _noop_async)
-        monkeypatch.setattr(assistant_router.assistant_service, "startup", _noop_async)
+        monkeypatch.setattr(assistant_router.assistant_service, "startup", start_agent)
         monkeypatch.setattr(assistant_router.assistant_service, "shutdown", _noop_async)
 
         app = app_module.app
@@ -58,6 +71,7 @@ class TestAppModule:
             assert hasattr(app.state, "generation_worker")
 
         assert worker.stopped
+        assert bool(agent_starts) is agent_enabled
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("auth_enabled", "expect_warning"), [("false", True), ("true", False)])

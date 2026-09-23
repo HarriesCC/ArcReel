@@ -17,6 +17,7 @@ from pydantic_core import PydanticCustomError
 
 from lib import PROJECT_ROOT
 from lib.infra.api_errors import BadRequestError, ConflictError, NotFoundError, ServiceUnavailableError
+from server.agent_runtime.availability import require_agent_enabled
 from server.agent_runtime.failure_observation import build_startup_failure_observation
 from server.agent_runtime.models import SessionMeta
 from server.agent_runtime.service import (
@@ -31,7 +32,7 @@ from server.agent_runtime.session_branch import SessionBranchError
 from server.agent_runtime.session_manager import AgentStartupError, SessionBusyError, SessionCapacityError
 from server.i18n import Translator, get_locale
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_agent_enabled)])
 
 assistant_service = AssistantService(project_root=PROJECT_ROOT)
 

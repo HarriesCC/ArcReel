@@ -578,3 +578,5 @@ Do not directly delete files referenced by current projects. Prefer archiving pr
 - [ ] Configure disk space and health-check alerts;
 - [ ] Confirm that model API keys do not appear in logs or the repository;
 - [ ] Read the license and `NOTICE`.
+
+For a personal test deployment without the embedded AI agent, set `ARCREEL_AGENT_ENABLED=false`. The web workspace and regular APIs remain available, while agent initialization and session endpoints are disabled (HTTP 503), so startup does not require an agent sandbox. By default, the agent remains enabled and sandbox checks are enforced. After fixing host permissions, remove this variable and restart to restore the agent.

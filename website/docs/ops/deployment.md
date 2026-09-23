@@ -591,3 +591,5 @@ find projects -type f -size +500M
 - [ ] 配置磁盘和健康检查告警；
 - [ ] 确认模型 API Key 不出现在日志和仓库；
 - [ ] 阅读许可证和 `NOTICE`。
+
+个人测试部署若暂不使用内嵌 AI 助手，可设置 `ARCREEL_AGENT_ENABLED=false`。此模式保留网页和普通 API，停用 Agent 初始化与会话接口（返回 HTTP 503），因此无需 Agent 沙箱即可启动。默认仍启用 Agent 并严格检查沙箱；解决宿主机权限后，移除该变量并重启即可恢复。
